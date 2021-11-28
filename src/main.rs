@@ -20,6 +20,13 @@ fn title_style() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+fn selected_dir_style() -> Style {
+    Style::default()
+        .fg(Color::LightBlue)
+        .bg(Color::Black)
+        .add_modifier(Modifier::ITALIC)
+}
+
 fn get_title_span(text: &str) -> Span {
     Span::styled(text, title_style())
 }
@@ -41,7 +48,7 @@ fn tree_widget(block: Block) -> List {
     List::new(get_files_list("/home/tyagig/rfm"))
         .block(block)
         .highlight_symbol(">>")
-        .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
+        .highlight_style(selected_dir_style())
 }
 
 fn main() -> Result<(), io::Error> {
