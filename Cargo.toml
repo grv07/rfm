@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 tui = "0.16"
 termion = "1.5"
+walkdir = "2.3.2"
