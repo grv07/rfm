@@ -4,7 +4,7 @@ use tui::backend::TermionBackend;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
-use tui::widgets::{Block, Borders, List, ListItem};
+use tui::widgets::{Block, Borders, List, ListState, ListItem};
 use tui::Terminal;
 
 use walkdir::WalkDir;
@@ -66,7 +66,9 @@ fn main() -> Result<(), io::Error> {
         let block = Block::default()
             .title(get_title_span("Dir"))
             .borders(Borders::ALL);
-        f.render_widget(tree_widget(block), chunks[0]);
+        let mut state = ListState::default();
+        state.select(Some(2));
+        f.render_stateful_widget(tree_widget(block), chunks[0], &mut state);
         let block = Block::default()
             .title(get_title_span("Files"))
             .borders(Borders::ALL);
@@ -74,3 +76,4 @@ fn main() -> Result<(), io::Error> {
     })?;
     Ok(())
 }
+
