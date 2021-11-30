@@ -56,6 +56,50 @@ fn tree_widget(block: Block) -> List {
         .highlight_style(selected_dir_style())
 }
 
+struct DirTree {
+    selected_index: usize,
+    items: List,
+}
+
+impl DirTree {
+    fn get_files_list(path: &str) -> Vec<ListItem> {
+        let mut list_item = Vec::new();
+        for entry in WalkDir::new(path)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let curr_file = entry.path().to_string_lossy().into_owned();
+            list_item.push(ListItem::new(curr_file));
+        }
+        list_item
+    }
+
+    fn new(path: &str) -> Self {
+        let list = List::new(Self::get_files_list(path))
+            .block(block)
+            .highlight_symbol(">>")
+            .highlight_style(selected_dir_style());
+        Self {
+            selected_index: 0,
+            items: list,
+        }
+    }
+
+    fn up(&mut self) {
+        self.selected_index += 1;
+    }
+
+    fn down() {
+        self.selected_index -= 1;
+    }
+}
+
+struct AppState {
+    dir_tree: DirTree,
+    files: Vec<String>,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -119,4 +163,3 @@ fn ui<B: Backend>(f: &mut Frame<B>) {
         .borders(Borders::ALL);
     f.render_widget(block, chunks[1]);
 }
-
