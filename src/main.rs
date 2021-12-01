@@ -25,6 +25,14 @@ fn title_style() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+fn default_border_style() -> Style {
+    Style::default().fg(Color::White)
+}
+
+fn active_border_style() -> Style {
+    Style::default().fg(Color::Blue)
+}
+
 fn selected_dir_style() -> Style {
     Style::default()
         .fg(Color::LightBlue)
@@ -39,14 +47,14 @@ fn get_title_span(text: &str) -> Span {
 struct DirTree<'a> {
     selected_index: usize,
     items: List<'a>,
-    length: usize,  
+    length: usize,
 }
 
 impl<'a> DirTree<'a> {
     fn files_list(path: &str) -> Vec<ListItem> {
         let mut list_item = Vec::new();
         for entry in WalkDir::new(path)
-            .max_depth(1)
+            .max_depth(10)
             .into_iter()
             .filter_map(|e| e.ok())
         {
@@ -72,28 +80,70 @@ impl<'a> DirTree<'a> {
         Self {
             selected_index: 0,
             items: list,
-            length: length, 
+            length: length,
+        }
+    }
+
+    fn page_up(&mut self, size: usize) {
+        if self.selected_index > size {
+            self.selected_index -= size;
+            return;
+        }
+        if self.selected_index > 0 {
+            self.selected_index = 0;
+            return;
+        }
+    }
+
+    fn page_down(&mut self, size: usize) {
+        if self.selected_index < self.length - 1 - size {
+            self.selected_index += size;
+            return;
+        }
+        if self.selected_index < self.length - 1 {
+            self.selected_index = self.length - 1;
+            return;
         }
     }
 
     fn up(&mut self) {
-        if self.selected_index < self.length-1 {
-            self.selected_index += 1
-        };
+        if self.selected_index > 0 {
+            self.selected_index -= 1
+        }
     }
 
     fn down(&mut self) {
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
+        if self.selected_index < self.length - 1 {
+            self.selected_index += 1;
         }
     }
 }
 
-struct AppState<'a> {
-    dir_tree: DirTree<'a>,
+struct FilesBlock {
     files: Vec<String>,
+    length: usize,
+    selected_index: usize,
 }
 
+enum ActiveBlock {
+    Dir,
+    Files,
+}
+
+//struct AppState<'a> {
+//    dir_tree: DirTree<'a>,
+//    files_block: FilesBlock,
+//    active_block: ActiveBlock,
+//    is_dirty: bool, // check in loop if dirty only then try to modify the
+//    // app state.. helps to minimize the load on loop..
+//}
+//
+//impl AppState {
+//    // will return block style for block.. it calc
+//    // based on current active state.
+//    fn block_style();
+//}
+//
 fn main() -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -122,7 +172,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
     let block = Block::default()
         .title(get_title_span("Dir"))
-        .borders(Borders::ALL);
+        .borders(Borders::ALL)
+        .border_style(active_border_style());
 
     let mut dir_tree = DirTree::new("/home/tyagig/rfm", block);
 
@@ -131,8 +182,18 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
         if let Event::Key(key_event) = read()? {
             match key_event.code {
                 KeyCode::Char('q') => return Ok(()),
-                KeyCode::Char('n') => {dir_tree.up();},
-                KeyCode::Char('p') => { dir_tree.down(); } ,
+                KeyCode::Char('n') => {
+                    dir_tree.down();
+                }
+                KeyCode::Char('p') => {
+                    dir_tree.up();
+                }
+                KeyCode::PageDown => {
+                    dir_tree.page_down(50);
+                }
+                KeyCode::PageUp => {
+                    dir_tree.page_up(50);
+                }
                 _ => {}
             }
         }
