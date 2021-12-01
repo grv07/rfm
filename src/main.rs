@@ -36,33 +36,14 @@ fn get_title_span(text: &str) -> Span {
     Span::styled(text, title_style())
 }
 
-fn get_files_list(path: &str) -> Vec<ListItem> {
-    let mut list_item = Vec::new();
-    for entry in WalkDir::new(path)
-        .max_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        let curr_file = entry.path().to_string_lossy().into_owned();
-        list_item.push(ListItem::new(curr_file));
-    }
-    list_item
-}
-
-fn tree_widget(block: Block) -> List {
-    List::new(get_files_list("/home/tyagig/rfm"))
-        .block(block)
-        .highlight_symbol(">>")
-        .highlight_style(selected_dir_style())
-}
-
-struct DirTree {
+struct DirTree<'a> {
     selected_index: usize,
-    items: List,
+    items: List<'a>,
+    length: usize,  
 }
 
-impl DirTree {
-    fn get_files_list(path: &str) -> Vec<ListItem> {
+impl<'a> DirTree<'a> {
+    fn files_list(path: &str) -> Vec<ListItem> {
         let mut list_item = Vec::new();
         for entry in WalkDir::new(path)
             .max_depth(1)
@@ -75,28 +56,41 @@ impl DirTree {
         list_item
     }
 
-    fn new(path: &str) -> Self {
-        let list = List::new(Self::get_files_list(path))
+    fn current_state(&self) -> ListState {
+        let mut state = ListState::default();
+        state.select(Some(self.selected_index));
+        state
+    }
+
+    fn new(path: &'a str, block: Block<'a>) -> Self {
+        let items = Self::files_list(path);
+        let length = items.len();
+        let list = List::new(items)
             .block(block)
             .highlight_symbol(">>")
             .highlight_style(selected_dir_style());
         Self {
             selected_index: 0,
             items: list,
+            length: length, 
         }
     }
 
     fn up(&mut self) {
-        self.selected_index += 1;
+        if self.selected_index < self.length-1 {
+            self.selected_index += 1
+        };
     }
 
-    fn down() {
-        self.selected_index -= 1;
+    fn down(&mut self) {
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+        }
     }
 }
 
-struct AppState {
-    dir_tree: DirTree,
+struct AppState<'a> {
+    dir_tree: DirTree<'a>,
     files: Vec<String>,
 }
 
@@ -126,18 +120,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
+    let block = Block::default()
+        .title(get_title_span("Dir"))
+        .borders(Borders::ALL);
+
+    let mut dir_tree = DirTree::new("/home/tyagig/rfm", block);
+
     loop {
-        terminal.draw(|f| ui(f))?;
+        terminal.draw(|f| ui(f, &mut dir_tree))?;
         if let Event::Key(key_event) = read()? {
             match key_event.code {
                 KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('n') => {dir_tree.up();},
+                KeyCode::Char('p') => { dir_tree.down(); } ,
                 _ => {}
             }
         }
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>) {
+fn ui<B: Backend>(f: &mut Frame<B>, dir_tree: &mut DirTree) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .margin(1)
@@ -152,12 +154,11 @@ fn ui<B: Backend>(f: &mut Frame<B>) {
             .as_ref(),
         )
         .split(f.size());
-    let block = Block::default()
-        .title(get_title_span("Dir"))
-        .borders(Borders::ALL);
-    let mut state = ListState::default();
-    state.select(Some(2));
-    f.render_stateful_widget(tree_widget(block), chunks[0], &mut state);
+
+    let mut state = dir_tree.current_state();
+    let tree_widget = dir_tree.items.clone();
+    f.render_stateful_widget(tree_widget, chunks[0], &mut state);
+
     let block = Block::default()
         .title(get_title_span("Files"))
         .borders(Borders::ALL);
