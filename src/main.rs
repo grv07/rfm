@@ -179,10 +179,12 @@ enum ActiveBlock {
     Files,
 }
 
+const ACTIVE: &'static [ActiveBlock] = &[ActiveBlock::Files, ActiveBlock::Dir];
+
 struct AppState<'a> {
     dir_block: DirTree<'a>,
     files_block: FilesBlock<'a>,
-    active_block: ActiveBlock,
+    active_index: usize,
     is_dirty: bool,
     // check in loop if dirty only then try to modify the
     // app state.. helps to minimize the load on loop..
@@ -193,26 +195,22 @@ impl<'a> AppState<'a> {
     // based on current active state.
     //fn block_style();
 
-    fn change_active_state(&mut self) {
-        match self.active_block {
-            ActiveBlock::Dir => {
-                self.active_block = ActiveBlock::Files;
-                self.dir_block.is_active = false;
-                self.files_block.is_active = true;
-            }
-            ActiveBlock::Files => {
-                self.active_block = ActiveBlock::Dir;
-                self.files_block.is_active = false;
-                self.dir_block.is_active = true;
-            }
+    fn next_state(&mut self) {
+        self.active_index += 1;
+        if self.active_index >= ACTIVE.len() {
+            self.active_index = 0;
         }
+    }
+
+    fn get_dir_widget(&self) -> List {
+        self.dir_block.list.clone()
     }
 
     fn new(dir_block: DirTree<'a>, files_block: FilesBlock<'a>, active_block: ActiveBlock) -> Self {
         Self {
             dir_block: dir_block,
             files_block: files_block,
-            active_block: ActiveBlock::Dir,
+            active_index: 0,
             is_dirty: false,
         }
     }
@@ -331,7 +329,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app_state: &mut AppState) {
         .split(f.size());
 
     //let mut state = app_state.current_state();
-    let dir_widget = app_state.dir_block.list.clone();
+    let dir_widget = app_state.get_dir_widget();
     //f.render_stateful_widget(tree_widget, chunks[0], &mut state);
     f.render_widget(dir_widget, chunks[0]);
 
