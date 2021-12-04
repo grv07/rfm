@@ -48,7 +48,6 @@ struct DirTree<'a> {
     selected_index: usize,
     list: List<'a>,
     length: usize,
-    is_active: bool,
 }
 
 impl<'a> DirTree<'a> {
@@ -71,22 +70,34 @@ impl<'a> DirTree<'a> {
         state
     }
 
-    fn check_active() {
-
+    fn set_active(&mut self, is_active: bool) {
+        let mut style = active_border_style();
+        if !is_active {
+            style = default_border_style();
+        }
+        let block = Block::default()
+            .title(get_title_span("Dir"))
+            .borders(Borders::ALL)
+            .border_style(style);
+        self.list = self.list.clone().block(block);
     }
 
-    fn new(path: &'a str, block: Block<'a>) -> Self {
+    fn new(path: &'a str) -> Self {
+        let block = Block::default()
+            .title(get_title_span("Dir"))
+            .borders(Borders::ALL)
+            .border_style(default_border_style());
         let list = Self::files_list(path);
         let length = list.len();
         let list = List::new(list)
             .block(block)
             .highlight_symbol(">>")
             .highlight_style(selected_dir_style());
+
         Self {
             selected_index: 0,
             list: list,
             length: length,
-            is_active: false,
         }
     }
 
@@ -146,7 +157,28 @@ impl<'a> FilesBlock<'a> {
         list_item
     }
 
-    fn new(selected_dir: &'a str, block: Block<'a>) -> Self {
+    fn current_state(&self) -> ListState {
+        let mut state = ListState::default();
+        state.select(Some(self.selected_index));
+        state
+    }
+
+    fn set_active(&mut self, is_active: bool) {
+        let mut style = active_border_style();
+        if !is_active {
+            style = default_border_style();
+        }
+        let block = Block::default()
+            .title(get_title_span("Files"))
+            .borders(Borders::ALL)
+            .border_style(style);
+        self.list = self.list.clone().block(block);
+    }
+
+    fn new(selected_dir: &'a str) -> Self {
+        let block = Block::default()
+            .title(get_title_span("Files"))
+            .borders(Borders::ALL);
         let files = FilesBlock::files_list(selected_dir);
         let len = files.len();
         let list = List::new(files)
@@ -158,6 +190,28 @@ impl<'a> FilesBlock<'a> {
             length: len,
             selected_index: 0,
             is_active: false,
+        }
+    }
+
+    fn page_up(&mut self, size: usize) {
+        if self.selected_index > size {
+            self.selected_index -= size;
+            return;
+        }
+        if self.selected_index > 0 {
+            self.selected_index = 0;
+            return;
+        }
+    }
+
+    fn page_down(&mut self, size: usize) {
+        if self.selected_index < self.length - 1 - size {
+            self.selected_index += size;
+            return;
+        }
+        if self.selected_index < self.length - 1 {
+            self.selected_index = self.length - 1;
+            return;
         }
     }
 
@@ -179,13 +233,12 @@ enum ActiveBlock {
     Files,
 }
 
-const ACTIVE: &'static [ActiveBlock] = &[ActiveBlock::Files, ActiveBlock::Dir];
+const ACTIVE: &'static [ActiveBlock] = &[ActiveBlock::Dir, ActiveBlock::Files];
 
 struct AppState<'a> {
     dir_block: DirTree<'a>,
     files_block: FilesBlock<'a>,
     active_index: usize,
-    is_dirty: bool,
     // check in loop if dirty only then try to modify the
     // app state.. helps to minimize the load on loop..
 }
@@ -193,61 +246,84 @@ struct AppState<'a> {
 impl<'a> AppState<'a> {
     // will return block style for block.. it calc
     // based on current active state.
-    //fn block_style();
 
-    fn next_state(&mut self) {
+    fn active_next(&mut self) {
         self.active_index += 1;
         if self.active_index >= ACTIVE.len() {
             self.active_index = 0;
         }
     }
 
-    fn get_dir_widget(&self) -> List {
+    fn active_prev(&mut self) {
+        if self.active_index > 0 {
+            self.active_index -= 1;
+        }
+        else {
+            self.active_index = ACTIVE.len() - 1;
+        }
+    }
+
+    fn get_dir_widget(&mut self) -> List {
+        self.dir_block.set_active(false);
+        self.files_block.set_active(false);
+        if self.active_index == 0 {
+            self.dir_block.set_active(true);
+        }
         self.dir_block.list.clone()
+    }
+
+    fn get_files_widget(&mut self) -> List {
+        self.dir_block.set_active(false);
+        self.files_block.set_active(false);
+        if self.active_index == 1 {
+            self.files_block.set_active(true);
+        }
+        self.files_block.list.clone()
     }
 
     fn new(dir_block: DirTree<'a>, files_block: FilesBlock<'a>, active_block: ActiveBlock) -> Self {
         Self {
             dir_block: dir_block,
             files_block: files_block,
-            active_index: 0,
-            is_dirty: false,
+            active_index: 1,
         }
     }
 
-    //fn page_up(&mut self, size: usize) {
-    //    if self.selected_index > size {
-    //        self.selected_index -= size;
-    //        return;
-    //    }
-    //    if self.selected_index > 0 {
-    //        self.selected_index = 0;
-    //        return;
-    //    }
-    //}
+    fn page_up(&mut self, size: usize) {
+        if self.active_index == 0 {
+            self.dir_block.page_up(size);
+        }
+        if self.active_index == 1 {
+            self.files_block.page_up(size);
+        }
+    }
 
-    //fn page_down(&mut self, size: usize) {
-    //    if self.selected_index < self.length - 1 - size {
-    //        self.selected_index += size;
-    //        return;
-    //    }
-    //    if self.selected_index < self.length - 1 {
-    //        self.selected_index = self.length - 1;
-    //        return;
-    //    }
-    //}
+    fn page_down(&mut self, size: usize) {
+        if self.active_index == 0 {
+            self.dir_block.page_down(size);
+        }
+        if self.active_index == 1 {
+            self.files_block.page_down(size);
+        }
+    }
 
-    //fn up(&mut self) {
-    //    if self.selected_index > 0 {
-    //        self.selected_index -= 1
-    //    }
-    //}
+    fn up(&mut self) {
+        if self.active_index == 0 {
+            self.dir_block.up();
+        }
+        if self.active_index == 1 {
+            self.files_block.up();
+        }
+    }
 
-    //fn down(&mut self) {
-    //    if self.selected_index < self.length - 1 {
-    //        self.selected_index += 1;
-    //    }
-    //}
+    fn down(&mut self) {
+        if self.active_index == 0 {
+            self.dir_block.down();
+        }
+        if self.active_index == 1 {
+            self.files_block.down();
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -276,17 +352,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
-    let dir_block = Block::default()
-        .title(get_title_span("Dir"))
-        .borders(Borders::ALL)
-        .border_style(active_border_style());
-
-    let files_block = Block::default()
-        .title(get_title_span("Files"))
-        .borders(Borders::ALL);
-
-    let mut dir_block = DirTree::new("/home/tyagig/rfm", dir_block);
-    let files_block = FilesBlock::new("/home/tyagig/rfm", files_block);
+    let mut dir_block = DirTree::new("/home/tyagig/rfm");
+    let files_block = FilesBlock::new("/home/tyagig/rfm");
 
     let mut app_state = AppState::new(dir_block, files_block, ActiveBlock::Dir);
     loop {
@@ -295,16 +362,22 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
             match key_event.code {
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Char('n') => {
-                    //dir_block.down();
+                    app_state.down();
                 }
                 KeyCode::Char('p') => {
-                    //dir_block.up();
+                    app_state.up();
                 }
                 KeyCode::PageDown => {
-                    //dir_block.page_down(50);
+                    app_state.page_down(50);
                 }
                 KeyCode::PageUp => {
-                    //dir_block.page_up(50);
+                    app_state.page_up(50);
+                }
+                KeyCode::Left => {
+                    app_state.active_prev();
+                }
+                KeyCode::Right => {
+                    app_state.active_next();
                 }
                 _ => {}
             }
@@ -328,11 +401,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app_state: &mut AppState) {
         )
         .split(f.size());
 
-    //let mut state = app_state.current_state();
+    let mut dir_state = app_state.dir_block.current_state();
     let dir_widget = app_state.get_dir_widget();
-    //f.render_stateful_widget(tree_widget, chunks[0], &mut state);
-    f.render_widget(dir_widget, chunks[0]);
+    f.render_stateful_widget(dir_widget, chunks[0], &mut dir_state);
 
-    let files_widget = app_state.files_block.list.clone();
-    f.render_widget(files_widget, chunks[1]);
+    let mut files_state = app_state.files_block.current_state();
+    let files_widget = app_state.get_files_widget();
+    f.render_stateful_widget(files_widget, chunks[1], &mut files_state);
 }
