@@ -30,7 +30,7 @@ fn default_border_style() -> Style {
 }
 
 fn active_border_style() -> Style {
-    Style::default().fg(Color::Blue)
+    Style::default().fg(Color::Yellow)
 }
 
 fn selected_dir_style() -> Style {
@@ -54,9 +54,9 @@ impl<'a> DirTree<'a> {
     fn files_list(path: &str) -> Vec<ListItem> {
         let mut list_item = Vec::new();
         for entry in WalkDir::new(path)
-            .max_depth(10)
+            .max_depth(1)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(|e| e.ok()).filter(|e| e.file_type().is_dir())
         {
             let curr_file = entry.path().to_string_lossy().into_owned();
             list_item.push(ListItem::new(curr_file));
