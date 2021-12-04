@@ -257,8 +257,7 @@ impl<'a> AppState<'a> {
     fn active_prev(&mut self) {
         if self.active_index > 0 {
             self.active_index -= 1;
-        }
-        else {
+        } else {
             self.active_index = ACTIVE.len() - 1;
         }
     }
