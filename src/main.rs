@@ -45,21 +45,31 @@ fn get_title_span(text: &str) -> Span {
 }
 
 struct DirTree<'a> {
+    dirs: Vec<String>,
     selected_index: usize,
     list: List<'a>,
     length: usize,
 }
 
 impl<'a> DirTree<'a> {
-    fn files_list(path: &str) -> Vec<ListItem> {
+    fn dirs(path: &str) -> Vec<String> {
         let mut list_item = Vec::new();
         for entry in WalkDir::new(path)
             .max_depth(1)
             .into_iter()
-            .filter_map(|e| e.ok()).filter(|e| e.file_type().is_dir())
+            .filter_map(|e| e.ok()).filter(|e| e.file_type().is_file())
         {
             let curr_file = entry.path().to_string_lossy().into_owned();
-            list_item.push(ListItem::new(curr_file));
+            list_item.push(curr_file);
+        }
+        list_item
+    }
+
+    fn list_item(path: &str) -> Vec<ListItem> {
+        let mut list_item = Vec::new();
+        for entry in Self::dirs(path) 
+        {
+            list_item.push(ListItem::new(entry));
         }
         list_item
     }
@@ -87,7 +97,7 @@ impl<'a> DirTree<'a> {
             .title(get_title_span("Dir"))
             .borders(Borders::ALL)
             .border_style(default_border_style());
-        let list = Self::files_list(path);
+        let list = Self::list_item(path);
         let length = list.len();
         let list = List::new(list)
             .block(block)
@@ -95,6 +105,7 @@ impl<'a> DirTree<'a> {
             .highlight_style(selected_dir_style());
 
         Self {
+            dirs: Self::dirs(path),
             selected_index: 0,
             list: list,
             length: length,
@@ -137,6 +148,7 @@ impl<'a> DirTree<'a> {
 }
 
 struct FilesBlock<'a> {
+    files: Vec<String>,
     list: List<'a>,
     length: usize,
     selected_index: usize,
@@ -144,14 +156,24 @@ struct FilesBlock<'a> {
 }
 
 impl<'a> FilesBlock<'a> {
-    fn files_list(path: &str) -> Vec<ListItem> {
+    fn files(path: &str) -> Vec<String> {
         let mut list_item = Vec::new();
         for entry in WalkDir::new(path)
-            .max_depth(10)
+            .max_depth(1)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(|e| e.ok()).filter(|e| e.file_type().is_file())
         {
             let curr_file = entry.path().to_string_lossy().into_owned();
+            list_item.push(curr_file);
+        }
+        list_item
+    }
+
+    fn list_item(path: &str) -> Vec<ListItem> {
+        let mut list_item = Vec::new();
+        for entry in FilesBlock::files(path) 
+        {
+            let curr_file = entry;
             list_item.push(ListItem::new(curr_file));
         }
         list_item
@@ -179,13 +201,14 @@ impl<'a> FilesBlock<'a> {
         let block = Block::default()
             .title(get_title_span("Files"))
             .borders(Borders::ALL);
-        let files = FilesBlock::files_list(selected_dir);
+        let files = FilesBlock::list_item(selected_dir);
         let len = files.len();
         let list = List::new(files)
             .block(block)
             .highlight_symbol(">>")
             .highlight_style(selected_dir_style());
         Self {
+            files: FilesBlock::files(selected_dir),
             list: list,
             length: len,
             selected_index: 0,
@@ -281,6 +304,7 @@ impl<'a> AppState<'a> {
     }
 
     fn new(dir_block: DirTree<'a>, files_block: FilesBlock<'a>, active_block: ActiveBlock) -> Self {
+        let path  = dir_block.dirs[0].clone();
         Self {
             dir_block: dir_block,
             files_block: files_block,
@@ -351,8 +375,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
-    let mut dir_block = DirTree::new("/home/tyagig/rfm");
-    let files_block = FilesBlock::new("/home/tyagig/rfm");
+    let dirs = DirTree::dirs();
+    let mut dir_block = DirTree::new(".");
+    let files_block = FilesBlock::new(path.unwrap());
 
     let mut app_state = AppState::new(dir_block, files_block, ActiveBlock::Dir);
     loop {
